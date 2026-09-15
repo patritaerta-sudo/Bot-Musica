@@ -143,6 +143,57 @@ client.on('messageCreate', async (message) => {
 
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
+
+  if (interaction.commandName === 'actualizarhistorial') {
+    if (!interaction.memberPermissions?.has('Administrator')) {
+      await interaction.reply({
+        content: 'Solo un administrador puede usar este comando.',
+        ephemeral: true,
+      });
+      return;
+    }
+
+    await interaction.deferReply({ ephemeral: true });
+
+    const channel = await client.channels.fetch(SONG_CHANNEL_ID);
+    let actualizados = 0;
+    let fallidos = 0;
+    let lastId = undefined;
+
+    while (true) {
+      const batch = await channel.messages.fetch({ limit: 100, before: lastId });
+      if (batch.size === 0) break;
+
+      for (const msg of batch.values()) {
+        lastId = msg.id;
+
+        // Solo nos interesan los mensajes del propio bot que sean respuesta a una canción.
+        if (msg.author.id !== client.user.id) continue;
+        if (!msg.reference?.messageId) continue;
+
+        try {
+          const original = await channel.messages.fetch(msg.reference.messageId);
+          const track = await buscarCancion(original.content);
+          const { embeds, files, row } = await construirFicha(track, original.author.username);
+
+          await msg.edit({ embeds, files, components: row ? [row] : [] });
+          actualizados++;
+        } catch (err) {
+          console.error('No se pudo actualizar un mensaje viejo:', err.message);
+          fallidos++;
+        }
+
+        // Pausa chica entre ediciones para no chocar con los límites de la API de Discord.
+        await new Promise(resolve => setTimeout(resolve, 1200));
+      }
+    }
+
+    await interaction.editReply({
+      content: `Listo. Actualicé ${actualizados} fichas viejas${fallidos > 0 ? ` (${fallidos} no se pudieron actualizar)` : ''}.`,
+    });
+    return;
+  }
+
   if (interaction.commandName !== 'corregir') return;
 
   const entry = lastSongByUser.get(interaction.user.id);
