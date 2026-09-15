@@ -94,7 +94,7 @@ function construirFicha(track, autor) {
     .setTitle(track.name)
     .setURL(track.external_urls.spotify)
     .setDescription(`**${artistas}**\n${track.album.name} · ${minutos}:${segundos}`)
-    .setThumbnail(portada)
+    .setImage(portada)
     .setFooter({ text: `Publicado por ${autor}` });
 
   const row = new ActionRowBuilder().addComponents(
