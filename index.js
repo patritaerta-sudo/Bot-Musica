@@ -105,7 +105,7 @@ async function construirFicha(track, autor) {
       .setURL(track.external_urls.spotify)
       .setDescription(`**${artistas}**\n${track.album.name}`)
       .setImage(track.album.images?.[0]?.url)
-      .setFooter({ text: `Publicado por ${autor}` });
+      .setFooter({ text: `[debug] ${err.message}`.slice(0, 200) });
     return { embeds: [embed], files: [], row };
   }
 }
