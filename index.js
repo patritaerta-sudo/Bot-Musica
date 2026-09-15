@@ -6,8 +6,10 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  AttachmentBuilder,
 } = require('discord.js');
 const SpotifyWebApi = require('spotify-web-api-node');
+const { generarTarjeta } = require('./card');
 
 const SONG_CHANNEL_ID = process.env.SONG_CHANNEL_ID;
 
@@ -70,7 +72,7 @@ async function buscarCancion(texto) {
   return track || null;
 }
 
-function construirFicha(track, autor) {
+async function construirFicha(track, autor) {
   if (!track) {
     const embed = new EmbedBuilder()
       .setColor(0xed4245)
@@ -79,23 +81,8 @@ function construirFicha(track, autor) {
         `Si el nombre está mal, usá **/corregir** para arreglarlo.`
       )
       .setFooter({ text: `Publicado por ${autor}` });
-    return { embed, row: null };
+    return { embeds: [embed], files: [], row: null };
   }
-
-  const artistas = track.artists.map(a => a.name).join(', ');
-  const portada = track.album.images?.[0]?.url;
-  const duracionMs = track.duration_ms;
-  const minutos = Math.floor(duracionMs / 60000);
-  const segundos = String(Math.floor((duracionMs % 60000) / 1000)).padStart(2, '0');
-
-  const embed = new EmbedBuilder()
-    .setColor(0x1db954)
-    .setAuthor({ name: 'Nueva canción 🎵' })
-    .setTitle(track.name)
-    .setURL(track.external_urls.spotify)
-    .setDescription(`**${artistas}**\n${track.album.name} · ${minutos}:${segundos}`)
-    .setImage(portada)
-    .setFooter({ text: `Publicado por ${autor}` });
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -104,7 +91,23 @@ function construirFicha(track, autor) {
       .setURL(track.external_urls.spotify)
   );
 
-  return { embed, row };
+  try {
+    const buffer = await generarTarjeta(track);
+    const attachment = new AttachmentBuilder(buffer, { name: 'tarjeta.png' });
+    return { embeds: [], files: [attachment], row, imageAttached: true };
+  } catch (err) {
+    console.error('Error generando la tarjeta, uso embed simple como respaldo:', err);
+    const artistas = track.artists.map(a => a.name).join(', ');
+    const embed = new EmbedBuilder()
+      .setColor(0x1db954)
+      .setAuthor({ name: 'Nueva canción 🎵' })
+      .setTitle(track.name)
+      .setURL(track.external_urls.spotify)
+      .setDescription(`**${artistas}**\n${track.album.name}`)
+      .setImage(track.album.images?.[0]?.url)
+      .setFooter({ text: `Publicado por ${autor}` });
+    return { embeds: [embed], files: [], row };
+  }
 }
 
 client.once('ready', () => {
@@ -119,10 +122,11 @@ client.on('messageCreate', async (message) => {
 
   try {
     const track = await buscarCancion(message.content);
-    const { embed, row } = construirFicha(track, message.author.username);
+    const { embeds, files, row } = await construirFicha(track, message.author.username);
 
     const botMessage = await message.reply({
-      embeds: [embed],
+      embeds,
+      files,
       components: row ? [row] : [],
     });
 
@@ -156,10 +160,11 @@ client.on('interactionCreate', async (interaction) => {
     const botMessage = await channel.messages.fetch(entry.botMessageId);
 
     const track = await buscarCancion(nuevaBusqueda);
-    const { embed, row } = construirFicha(track, interaction.user.username);
+    const { embeds, files, row } = await construirFicha(track, interaction.user.username);
 
     await botMessage.edit({
-      embeds: [embed],
+      embeds,
+      files,
       components: row ? [row] : [],
     });
 

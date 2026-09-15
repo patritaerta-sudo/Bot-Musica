@@ -9,6 +9,7 @@
     "deploy-commands": "node deploy-commands.js"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^0.1.52",
     "discord.js": "^14.15.3",
     "dotenv": "^16.4.5",
     "spotify-web-api-node": "^5.0.2"
