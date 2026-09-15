@@ -1,4 +1,16 @@
-const { createCanvas, loadImage } = require('@napi-rs/canvas');
+const path = require('path');
+const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
+
+// Registramos las fuentes dentro del proyecto para que funcione igual en
+// Windows y en Railway/Linux, sin depender de fuentes instaladas en el sistema.
+const FONT_DIR = path.join(__dirname, 'fonts');
+const regularFont = path.join(FONT_DIR, 'NotoSans-Regular.ttf');
+const boldFont = path.join(FONT_DIR, 'NotoSans-Bold.ttf');
+
+const regularRegistered = GlobalFonts.registerFromPath(regularFont, 'Noto Sans');
+const boldRegistered = GlobalFonts.registerFromPath(boldFont, 'Noto Sans Bold');
+
+console.log(`[card] Fuentes registradas: regular=${regularRegistered}, bold=${boldRegistered}`);
 
 const WIDTH = 1200;
 const HEIGHT = 630;
@@ -94,23 +106,23 @@ async function generarTarjeta(track) {
   const maxTextWidth = WIDTH - textX - 60;
 
   ctx.fillStyle = '#1DB954';
-  ctx.font = 'bold 26px sans-serif';
+  ctx.font = '700 26px "Noto Sans Bold"';
   ctx.fillText('NUEVA CANCIÓN', textX, coverY + 30);
 
   ctx.fillStyle = '#FFFFFF';
-  ctx.font = 'bold 54px sans-serif';
+  ctx.font = '700 54px "Noto Sans Bold"';
   const tituloY = wrapText(ctx, track.name, textX, coverY + 105, maxTextWidth, 62, 2);
 
   const artistas = track.artists.map(a => a.name).join(', ');
   ctx.fillStyle = '#E4E4E4';
-  ctx.font = '32px sans-serif';
+  ctx.font = '32px "Noto Sans"';
   wrapText(ctx, artistas, textX, tituloY + 60, maxTextWidth, 40, 1);
 
   const duracionMs = track.duration_ms;
   const minutos = Math.floor(duracionMs / 60000);
   const segundos = String(Math.floor((duracionMs % 60000) / 1000)).padStart(2, '0');
   ctx.fillStyle = '#A0A0A0';
-  ctx.font = '24px sans-serif';
+  ctx.font = '24px "Noto Sans"';
   ctx.fillText(`${track.album.name} · ${minutos}:${segundos}`, textX, coverY + COVER_SIZE - 10);
 
   return canvas.toBuffer('image/png');
