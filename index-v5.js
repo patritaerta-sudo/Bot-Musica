@@ -13,7 +13,6 @@ const { generarTarjeta } = require('./card');
 
 const SONG_CHANNEL_ID = process.env.SONG_CHANNEL_ID;
 
-// --- Cliente de Discord ---
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -22,7 +21,6 @@ const client = new Client({
   ],
 });
 
-// --- Cliente de Spotify (Client Credentials Flow: solo para búsqueda pública) ---
 const spotifyApi = new SpotifyWebApi({
   clientId: process.env.SPOTIFY_CLIENT_ID,
   clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
@@ -32,26 +30,16 @@ async function refreshSpotifyToken() {
   try {
     const data = await spotifyApi.clientCredentialsGrant();
     spotifyApi.setAccessToken(data.body.access_token);
-    // el token dura ~1h, lo refrescamos un poco antes
     setTimeout(refreshSpotifyToken, (data.body.expires_in - 60) * 1000);
   } catch (err) {
     console.error('Error obteniendo token de Spotify:', err);
-    setTimeout(refreshSpotifyToken, 10_000); // reintenta en 10s
+    setTimeout(refreshSpotifyToken, 10_000);
   }
 }
 
-// Guarda, por usuario, cuál fue la última ficha que el bot publicó
-// (para que /corregir sepa qué mensaje editar)
-// Map<userId, { botMessageId, channelId, originalContent }>
 const lastSongByUser = new Map();
-
 const SPOTIFY_TRACK_URL_REGEX = /open\.spotify\.com\/track\/([a-zA-Z0-9]+)/;
 
-/**
- * Busca una canción en Spotify a partir de:
- * - un link directo de Spotify (usa el ID exacto), o
- * - texto libre (usa el buscador de Spotify)
- */
 async function buscarCancion(texto) {
   const linkMatch = texto.match(SPOTIFY_TRACK_URL_REGEX);
   if (linkMatch) {
@@ -62,11 +50,7 @@ async function buscarCancion(texto) {
       console.error('No se pudo obtener el track por ID:', err.message);
     }
   }
-
-  // Si no es un link de Spotify (o falló), buscamos por texto.
-  // Limpiamos otros links (ej. YouTube) para no ensuciar la búsqueda.
   const queryLimpio = texto.replace(/https?:\/\/\S+/g, '').trim() || texto;
-
   const result = await spotifyApi.searchTracks(queryLimpio, { limit: 1 });
   const track = result.body.tracks?.items?.[0];
   return track || null;
@@ -86,18 +70,20 @@ async function construirFicha(track, autor) {
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setLabel('Escuchar en Spotify (v5)')
+      .setLabel('CODIGO-NUEVO-OK')
       .setStyle(ButtonStyle.Link)
       .setURL(track.external_urls.spotify)
   );
 
   try {
+    console.log('>>> INTENTANDO GENERAR TARJETA <<<');
     const buffer = await generarTarjeta(track);
     if (!buffer) throw new Error('generarTarjeta devolvió null (sin portada disponible)');
+    console.log('>>> TARJETA GENERADA OK, tamaño:', buffer.length, '<<<');
     const attachment = new AttachmentBuilder(buffer, { name: 'tarjeta.png' });
     return { embeds: [], files: [attachment], row, imageAttached: true };
   } catch (err) {
-    console.error('Error generando la tarjeta, uso embed simple como respaldo:', err);
+    console.error('>>> ERROR GENERANDO TARJETA:', err.message, '<<<');
     const artistas = track.artists.map(a => a.name).join(', ');
     const embed = new EmbedBuilder()
       .setColor(0x1db954)
@@ -112,14 +98,16 @@ async function construirFicha(track, autor) {
 }
 
 client.once('ready', () => {
-  console.log(`Bot conectado como ${client.user.tag} — CODIGO VERSION 5`);
+  console.log(`>>> BOT CONECTADO - CODIGO NUEVO CARGADO - ${new Date().toISOString()} <<<`);
   refreshSpotifyToken();
 });
 
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (message.channelId !== SONG_CHANNEL_ID) return;
-  if (!message.content.trim()) return; // ignora mensajes solo con archivos, stickers, etc.
+  if (!message.content.trim()) return;
+
+  console.log('>>> MENSAJE RECIBIDO:', message.content, '<<<');
 
   try {
     const track = await buscarCancion(message.content);
@@ -137,7 +125,7 @@ client.on('messageCreate', async (message) => {
       originalContent: message.content,
     });
   } catch (err) {
-    console.error('Error procesando mensaje de canción:', err);
+    console.error('>>> ERROR PROCESANDO MENSAJE:', err, '<<<');
   }
 });
 
@@ -169,7 +157,6 @@ client.on('interactionCreate', async (interaction) => {
       components: row ? [row] : [],
     });
 
-    // actualizamos la entrada por si quiere corregir de nuevo
     lastSongByUser.set(interaction.user.id, {
       ...entry,
       originalContent: nuevaBusqueda,
